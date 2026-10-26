@@ -92,17 +92,27 @@ let osubs=[],O={rooms:{},pl:{},an:{},sel:null,mem:null};
 function obsStart(){
  if($("#pn").value.trim()!==TPIN)return $("#er").textContent="Ustoz kodi notoʻgʻri";
  if(!db)return $("#er").textContent="Maʼlumotlar bazasiga ulanib boʻlmadi";
- app.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:6px 0">👁 Kuzatuvchi</h2><button id="ox" class="alt" style="width:auto;padding:8px 14px">Chiqish</button></div><div id="of" class="of"></div><div id="og" class="og"></div><div id="od"></div>`;
+ app.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:6px 0">👁 Kuzatuvchi</h2><button id="ox" class="alt" style="width:auto;padding:8px 14px">Chiqish</button></div><div style="display:flex;gap:8px"><button id="ow1" class="alt" style="font-size:13px">🧹 Tugagan/eski xonalar</button><button id="ow2" class="alt" style="font-size:13px">🗑 Hammasini oʻchirish</button></div><div id="of" class="of"></div><div id="og" class="og"></div><div id="od"></div>`;
  $("#ox").onclick=()=>{osubs.forEach(f=>{try{f()}catch(e){}});osubs=[];O={rooms:{},pl:{},an:{},sel:null,mem:null};login()};
+ $("#ow1").onclick=()=>wipe("old");$("#ow2").onclick=()=>wipe("all");
  $("#og").onclick=e=>{const d=e.target.closest("[data-c]");if(d){O.sel=O.sel===d.dataset.c?null:d.dataset.c;O.mem=null;obsRender()}};
- $("#od").onclick=e=>{const d=e.target.closest("[data-u]");if(d){O.mem=O.mem===d.dataset.u?null:d.dataset.u;obsRender()}};
+ $("#od").onclick=async e=>{const x=e.target.closest("[data-del]");if(x){const c=x.dataset.del;if(confirm(`Guruh ${c} oʻchirilsinmi?`)){await wipeRoom(c);delete O.rooms[c];O.sel=null;obsRender()}return}const d=e.target.closest("[data-u]");if(d){O.mem=O.mem===d.dataset.u?null:d.dataset.u;obsRender()}};
  osubs.push(db.collection("rooms").onSnapshot(s=>{const cut=Date.now()-12*3600e3;
   s.docs.forEach(d=>{const r=d.data(),c=d.id;if(!r||(r.created||0)<cut)return;O.rooms[c]=r;
    if(!O.pl[c]){O.pl[c]={};O.an[c]={};
     osubs.push(db.collection(`rooms/${c}/players`).onSnapshot(q=>{const o={};q.docs.forEach(x=>o[x.id]=x.data());O.pl[c]=o;obsRender()}));
     osubs.push(db.collection(`rooms/${c}/ans`).onSnapshot(q=>{const o={};q.docs.forEach(x=>o[x.id]=x.data());O.an[c]=o;obsRender()}))}});
-  obsRender()}));
+  const ids=new Set(s.docs.map(d=>d.id));Object.keys(O.rooms).forEach(c=>{if(!ids.has(c))delete O.rooms[c]});obsRender()}));
 }
+async function wipeRoom(c){
+ for(const p of["players","ans","claims","firsts"]){try{const s=await db.collection(`rooms/${c}/${p}`).get();await Promise.all(s.docs.map(d=>db.doc(`rooms/${c}/${p}/${d.id}`).delete()))}catch(e){}}
+ await db.doc("rooms/"+c).delete()}
+async function wipe(m){
+ let s;try{s=await db.collection("rooms").get()}catch(e){return alert("Xonalarni oʻqib boʻlmadi")}
+ const cut=Date.now()-12*3600e3,ids=s.docs.filter(d=>{const r=d.data()||{};return m==="all"||r.state==="done"||(r.created||0)<cut}).map(d=>d.id);
+ if(!ids.length)return alert("Oʻchiriladigan xona yoʻq");
+ if(!confirm(`${ids.length} ta xona oʻchiriladi${m==="all"?" (hozir oʻynayotganlar ham)":""}. Davom etasizmi?`))return;
+ for(const c of ids){await wipeRoom(c);delete O.rooms[c];if(O.sel===c)O.sel=null}obsRender()}
 function obsRender(){
  const f=$("#of");if(!f)return;
  const codes=Object.keys(O.rooms).sort((a,b)=>(O.rooms[b].created||0)-(O.rooms[a].created||0));
@@ -122,7 +132,7 @@ function obsRender(){
  const mem=Object.entries(st).map(([u,s])=>`<div class="mc${O.mem===u?" on":""}" data-u="${u}"><b>${esc(s.name)}</b>${pl[u]?"":" 🚫"}<div class="os">✅ ${s.ok} · ❌ ${s.no}${s.pos!=null?" · "+s.pos+"/"+N:""}${s.str?" · ⚠"+s.str:""}</div></div>`).join("");
  const rows=Object.entries(an).filter(([k])=>!O.mem||k.split("_")[1]===O.mem).map(([k,a])=>({qi:+k.split("_")[0],a})).sort((x,y)=>y.qi-x.qi||(y.a.t||0)-(x.a.t||0)).slice(0,200).map(({qi,a})=>{const q=qs[qi]||{},ch=typeof a.choice==="number"?(q.o||[])[a.choice]:null,cr=(q.o||[])[q.a];
   return`<div class="ar" style="border-left:4px solid ${a.ok?"#2fbf71":"#e5484d"}"><div class="os">${qi+1}-savol · <b>${esc(a.name||"")}</b> ${a.ok?"✅ Toʻgʻri":"❌ Xato"}</div><div style="font-size:14px;margin:3px 0">${esc(q.q||"")}</div><div class="os">Tanladi: ${ch!=null?esc(ch):"javob bermadi"}${a.ok?"":" · Toʻgʻrisi: "+esc(cr||"")}</div></div>`}).join("");
- d.innerHTML=`<h3 style="margin:10px 0 4px">Guruh ${c}</h3><div class="of">${mem}</div>${rows||'<p class="os">Hali javoblar yoʻq…</p>'}`;
+ d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:10px 0 4px">Guruh ${c}</h3><button class="alt" data-del="${c}" style="width:auto;padding:6px 12px;font-size:13px">🗑 Oʻchirish</button></div><div class="of">${mem}</div>${rows||'<p class="os">Hali javoblar yoʻq…</p>'}`;
 }
 let mode="new";
 function login(msg){
