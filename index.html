@@ -14,6 +14,7 @@ input,textarea{width:100%;padding:12px;border-radius:10px;border:2px solid #5a43
 button{font:inherit;font-size:16px;border:0;border-radius:10px;padding:12px 14px;background:var(--gold);color:#2a1a08;font-weight:bold;width:100%;margin:6px 0}
 button.alt{background:#4b3826;color:var(--cream)}
 button:disabled{opacity:.4}
+.tabs button{font-size:13.5px;padding:12px 4px}.of{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 10px}.oc{flex:0 0 auto;min-width:150px;border:2px solid;border-radius:16px;padding:10px 14px;background:#1c1510}.ol{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.7;white-space:nowrap}.ov{font-size:22px;font-weight:bold;white-space:nowrap}.os{font-size:12px;opacity:.7}.og{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}.gc,.mc{border:2px solid #5a4630;border-radius:12px;padding:8px 10px;cursor:pointer;background:#1c1510}.gc.on,.mc.on{border-color:var(--gold)}.mc{flex:0 0 auto;min-width:120px}.ar{background:#1c1510;border-radius:10px;padding:8px 10px;margin:6px 0}
 .err{color:#ff8a7a;font-size:14px;min-height:18px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{flex:1 1 45%;background:#150e08;border:2px solid #5a4330;border-radius:10px;padding:6px 8px;font-size:13px;display:flex;justify-content:space-between;gap:6px}
@@ -86,20 +87,57 @@ async function kick(){kicked=true;
  cover('<div class="card"><div style="font-size:44px">🚫</div><h3>Siz oʻyindan chetlashtirildingiz</h3><p>Oʻyin vaqtida sahifadan ikki marta chiqdingiz.</p><button onclick="location.reload()">Bosh sahifa</button></div>')}
 document.addEventListener("visibilitychange",()=>document.hidden?goAway():comeBack());
 window.addEventListener("blur",goAway);window.addEventListener("focus",comeBack);window.addEventListener("pagehide",goAway);
+const TPIN="ustoz7491";
+let osubs=[],O={rooms:{},pl:{},an:{},sel:null,mem:null};
+function obsStart(){
+ if($("#pn").value.trim()!==TPIN)return $("#er").textContent="Ustoz kodi notoʻgʻri";
+ if(!db)return $("#er").textContent="Maʼlumotlar bazasiga ulanib boʻlmadi";
+ app.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:6px 0">👁 Kuzatuvchi</h2><button id="ox" class="alt" style="width:auto;padding:8px 14px">Chiqish</button></div><div id="of" class="of"></div><div id="og" class="og"></div><div id="od"></div>`;
+ $("#ox").onclick=()=>{osubs.forEach(f=>{try{f()}catch(e){}});osubs=[];O={rooms:{},pl:{},an:{},sel:null,mem:null};login()};
+ $("#og").onclick=e=>{const d=e.target.closest("[data-c]");if(d){O.sel=O.sel===d.dataset.c?null:d.dataset.c;O.mem=null;obsRender()}};
+ $("#od").onclick=e=>{const d=e.target.closest("[data-u]");if(d){O.mem=O.mem===d.dataset.u?null:d.dataset.u;obsRender()}};
+ osubs.push(db.collection("rooms").onSnapshot(s=>{const cut=Date.now()-12*3600e3;
+  s.docs.forEach(d=>{const r=d.data(),c=d.id;if(!r||(r.created||0)<cut)return;O.rooms[c]=r;
+   if(!O.pl[c]){O.pl[c]={};O.an[c]={};
+    osubs.push(db.collection(`rooms/${c}/players`).onSnapshot(q=>{const o={};q.docs.forEach(x=>o[x.id]=x.data());O.pl[c]=o;obsRender()}));
+    osubs.push(db.collection(`rooms/${c}/ans`).onSnapshot(q=>{const o={};q.docs.forEach(x=>o[x.id]=x.data());O.an[c]=o;obsRender()}))}});
+  obsRender()}));
+}
+function obsRender(){
+ const f=$("#of");if(!f)return;
+ const codes=Object.keys(O.rooms).sort((a,b)=>(O.rooms[b].created||0)-(O.rooms[a].created||0));
+ let ev=[];(O.sel?[O.sel]:codes).forEach(c=>Object.entries(O.an[c]||{}).forEach(([k,a])=>ev.push({c,qi:+k.split("_")[0],a})));
+ ev.sort((x,y)=>(y.a.t||0)-(x.a.t||0));
+ const sl=f.scrollLeft;
+ f.innerHTML=ev.length?ev.slice(0,80).map(e=>{const ok=!!e.a.ok,cl=ok?"#2fbf71":"#e5484d";
+  return`<div class="oc" style="border-color:${cl}"><div class="ol">${esc(e.a.name||"")}</div><div class="ov" style="color:${cl}">${ok?"Toʻgʻri ✅":"Xato ❌"}</div><div class="os">${e.c} · ${e.qi+1}-savol</div></div>`}).join(""):'<div class="os" style="padding:14px">Hali javoblar yoʻq…</div>';
+ f.scrollLeft=sl;
+ $("#og").innerHTML=codes.length?codes.map(c=>{const r=O.rooms[c],ci=CAT[r.f],ps=Object.values(O.pl[c]||{}).map(p=>esc(p.name)).join(", ")||"—";
+  const st=r.state==="play"?`Oʻyinda · ${(r.q||0)+1}/${(r.qs||[]).length}`:r.state==="done"?"Tugagan":"Kutilmoqda";
+  return`<div class="gc${O.sel===c?" on":""}" data-c="${c}"><b>${c}</b> <span class="os">${st}</span><div class="os">${ci?ci.name+" · "+(ci.topics[r.t]||""):""}</div><div style="font-size:13px">${ps}</div></div>`}).join(""):'<div class="os">Hali xonalar yoʻq…</div>';
+ const d=$("#od");if(!O.sel||!O.rooms[O.sel]){d.innerHTML=codes.length?'<p class="os">Guruhni tanlang: aʼzolar va ularning javoblarini batafsil koʻrasiz.</p>':"";return}
+ const c=O.sel,r=O.rooms[c],qs=r.qs||[],pl=O.pl[c]||{},an=O.an[c]||{},st={};
+ Object.entries(an).forEach(([k,a])=>{const u=k.split("_")[1];const s=st[u]||(st[u]={name:a.name,ok:0,no:0});a.ok?s.ok++:s.no++});
+ Object.entries(pl).forEach(([u,p])=>{const s=st[u]||(st[u]={name:p.name,ok:0,no:0});s.name=p.name;s.pos=p.pos;s.str=p.strikes||0});
+ const mem=Object.entries(st).map(([u,s])=>`<div class="mc${O.mem===u?" on":""}" data-u="${u}"><b>${esc(s.name)}</b>${pl[u]?"":" 🚫"}<div class="os">✅ ${s.ok} · ❌ ${s.no}${s.pos!=null?" · "+s.pos+"/"+N:""}${s.str?" · ⚠"+s.str:""}</div></div>`).join("");
+ const rows=Object.entries(an).filter(([k])=>!O.mem||k.split("_")[1]===O.mem).map(([k,a])=>({qi:+k.split("_")[0],a})).sort((x,y)=>y.qi-x.qi||(y.a.t||0)-(x.a.t||0)).slice(0,200).map(({qi,a})=>{const q=qs[qi]||{},ch=typeof a.choice==="number"?(q.o||[])[a.choice]:null,cr=(q.o||[])[q.a];
+  return`<div class="ar" style="border-left:4px solid ${a.ok?"#2fbf71":"#e5484d"}"><div class="os">${qi+1}-savol · <b>${esc(a.name||"")}</b> ${a.ok?"✅ Toʻgʻri":"❌ Xato"}</div><div style="font-size:14px;margin:3px 0">${esc(q.q||"")}</div><div class="os">Tanladi: ${ch!=null?esc(ch):"javob bermadi"}${a.ok?"":" · Toʻgʻrisi: "+esc(cr||"")}</div></div>`}).join("");
+ d.innerHTML=`<h3 style="margin:10px 0 4px">Guruh ${c}</h3><div class="of">${mem}</div>${rows||'<p class="os">Hali javoblar yoʻq…</p>'}`;
+}
 let mode="new";
 function login(msg){
- const F=Object.keys(CAT),nw=mode==="new";
+ const F=Object.keys(CAT),nw=mode==="new",ob=mode==="obs";
  app.innerHTML=`<h1>JUMANJI</h1><p class="sub">Bilim taxtasi · 4 kishilik oʻyin</p>
- <div class="card"><div style="display:flex;gap:8px;margin-bottom:10px"><button id="m1" class="${nw?"":"alt"}">Xona ochish</button><button id="m2" class="${nw?"alt":""}">Xonaga kirish</button></div>
- <label>Ismingiz</label><input id="nm" maxlength="30" placeholder="Masalan: Demirbek" value="${esc(myName)}">
+ <div class="card"><div class="tabs" style="display:flex;gap:6px;margin-bottom:10px"><button id="m1" class="${nw?"":"alt"}">Xona ochish</button><button id="m2" class="${mode==="join"?"":"alt"}">Xonaga kirish</button><button id="m3" class="${ob?"":"alt"}">👁 Kuzatuvchi</button></div>
+ ${ob?"":`<label>Ismingiz</label><input id="nm" maxlength="30" placeholder="Masalan: Demirbek" value="${esc(myName)}">`}
  ${nw?`<label>Fan</label><select id="fn">${F.map(k=>`<option value="${k}">${CAT[k].name}</option>`).join("")}</select><label>Mavzu</label><select id="tp"></select>`
- :`<label>Xona kodi (4 ta belgi)</label><input id="cd" maxlength="4" placeholder="Masalan: AB12" style="text-transform:uppercase">`}
+ :ob?`<label>Ustoz kodi</label><input id="pn" type="password" autocomplete="off">`:`<label>Xona kodi (4 ta belgi)</label><input id="cd" maxlength="4" placeholder="Masalan: AB12" style="text-transform:uppercase">`}
  <div class="err" id="er">${msg||""}</div>
- <button id="go">${nw?"Xonani ochish":"Oʻyinga kirish"}</button>
- <p class="sub">${nw?"Fan va mavzuni xona egasi tanlaydi. Doʻstlaringiz kod bilan kiradi.":"Kodni xona egasidan oling. Fan va mavzu avtomatik oʻrnatiladi."}</p></div>`;
- const sw=m=>{myName=$("#nm").value.trim();mode=m;login()};$("#m1").onclick=()=>sw("new");$("#m2").onclick=()=>sw("join");
+ <button id="go">${nw?"Xonani ochish":ob?"Kuzatishni boshlash":"Oʻyinga kirish"}</button>
+ <p class="sub">${ob?"Faqat ustoz uchun: barcha guruhlar va javoblarni koʻrish.":nw?"Fan va mavzuni xona egasi tanlaydi. Doʻstlaringiz kod bilan kiradi.":"Kodni xona egasidan oling. Fan va mavzu avtomatik oʻrnatiladi."}</p></div>`;
+ const sw=m=>{const e=$("#nm");if(e)myName=e.value.trim();mode=m;login()};$("#m1").onclick=()=>sw("new");$("#m2").onclick=()=>sw("join");$("#m3").onclick=()=>sw("obs");
  if(nw){const fill=()=>{const fv=$("#fn").value;$("#tp").innerHTML=Object.entries(CAT[fv].topics).map(([k,v])=>{const ok=k==="mix"||BANK.some(x=>x.f===fv&&inT(x,k));return`<option value="${k}"${ok?"":" disabled"}>${v}${ok?"":" (tez orada)"}</option>`}).join("")};$("#fn").onchange=fill;fill()}
- $("#go").onclick=join;
+ $("#go").onclick=()=>mode==="obs"?obsStart():join();
 }
 async function join(){
  const nm=$("#nm").value.trim(),er=$("#er"),nw=mode==="new";
